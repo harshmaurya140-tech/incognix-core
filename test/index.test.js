@@ -10,6 +10,7 @@ import { detectEmails } from "../src/detectors/email.js";
 import { detectApiKeys } from "../src/detectors/apiKey.js";
 import { assessRisk } from "../src/utils/risk.js";
 import { tokenize, detokenize } from "../src/core/tokenizer.js";
+import { scan, redact, restore, createEngine } from "../src/index.js";
 
 
 
@@ -387,4 +388,58 @@ test("Throws TypeError for invalid tokenizer inputs", () => {
   assert.throws(() => tokenize("hello", "not-an-array"), TypeError);
   assert.throws(() => detokenize(123, {}), TypeError);
   assert.throws(() => detokenize("hello", null), TypeError);
+});
+
+test("scan() detects mixed PII and secrets with aggregate risk", () => {
+  const prompt =
+    "Email harsh@example.com, server 192.168.1.10, key sk-proj-1234567890abcdefghijklmnop";
+  const result = scan(prompt);
+
+  assert.equal(result.findings.length, 3);
+  assert.equal(result.risk.level, "critical");
+  assert.equal(result.risk.score, 100);
+});
+
+test("redact() and restore() perform a full end-to-end round trip", () => {
+  const original =
+    "Send report to harsh@example.com with card 4111 1111 1111 1111";
+  const { redactedText, tokens, risk } = redact(original);
+
+  assert.equal(
+    redactedText,
+    "Send report to [EMAIL_1] with card [CREDIT_CARD_1]"
+  );
+  assert.equal(risk.level, "high");
+  assert.equal(restore(redactedText, tokens), original);
+});
+
+test("Allows selectively disabling specific detectors", () => {
+  const text = "Contact harsh@example.com at 192.168.1.10";
+  const result = scan(text, { detectors: { ip: false } });
+
+  assert.equal(result.findings.length, 1);
+  assert.equal(result.findings[0].type, "EMAIL");
+});
+
+test("createEngine() preserves default configuration across calls", () => {
+  const engine = createEngine({ country: "IN" });
+  const result = engine.redact("Call +91 9876543210 or 9876543210");
+
+  assert.equal(result.detections.length, 2);
+  assert.equal(result.redactedText, "Call [PHONE_1] or [PHONE_2]");
+});
+
+test("Handles clean text with zero findings", () => {
+  const result = redact("Summarize the quarterly roadmap.");
+
+  assert.equal(result.redactedText, "Summarize the quarterly roadmap.");
+  assert.deepEqual(result.tokens, {});
+  assert.equal(result.risk.level, "none");
+  assert.equal(result.risk.score, 0);
+});
+
+test("Throws TypeError for invalid engine inputs or options", () => {
+  assert.throws(() => scan(123), TypeError);
+  assert.throws(() => scan("hello", "bad-options"), TypeError);
+  assert.throws(() => createEngine(null), TypeError);
 });
