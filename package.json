@@ -1,9 +1,11 @@
 {
   "name": "incognix-core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A local-first JavaScript privacy protection and data redaction engine",
   "main": "./src/index.js",
-  "exports": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
   "type": "module",
   "files": [
     "src/",
