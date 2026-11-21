@@ -3,14 +3,38 @@
   "version": "0.1.0",
   "description": "A local-first JavaScript privacy protection and data redaction engine",
   "main": "./src/index.js",
-  "scripts": {
-    "test": "node --test"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "MIT",
-  "type": "module",
   "exports": "./src/index.js",
+  "type": "module",
+  "files": [
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "prepublishOnly": "npm test"
+  },
+  "keywords": [
+    "privacy",
+    "pii",
+    "redaction",
+    "tokenization",
+    "security",
+    "gdpr",
+    "data-masking",
+    "llm-security",
+    "incognix"
+  ],
+  "author": "Harsh Maurya",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/harshmaurya140-tech/incognix-core.git"
+  },
+  "bugs": {
+    "url": "https://github.com/harshmaurya140-tech/incognix-core/issues"
+  },
+  "homepage": "https://github.com/harshmaurya140-tech/incognix-core#readme",
   "engines": {
     "node": ">=20"
   },
