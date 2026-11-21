@@ -6,9 +6,8 @@ import {
   passesLuhn
 } from "../src/detectors/creditCard.js";
 import { detectIPs } from "../src/detectors/ip.js";
-
-
 import { detectEmails } from "../src/detectors/email.js";
+import { detectApiKeys } from "../src/detectors/apiKey.js";
 
 test("Detects a valid email address", () => {
 const result = detectEmails("Contact me at harsh@example.com");
@@ -199,4 +198,62 @@ test("Returns an empty array when no IP exists", () => {
 
 test("Throws an error for non-string input", () => {
   assert.throws(() => detectIPs(123), TypeError);
+});
+
+
+test("Detects an OpenAI-style API key", () => {
+  const result = detectApiKeys(
+    "My key is sk-proj-1234567890abcdefghijklmnop"
+  );
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0].type, "API_KEY");
+  assert.equal(result[0].category, "secret");
+  assert.equal(result[0].provider, "openai");
+  assert.equal(result[0].risk, "critical");
+});
+
+test("Detects an Anthropic-style API key without duplicate match", () => {
+  const result = detectApiKeys(
+    "ANTHROPIC_API_KEY=sk-ant-api03-1234567890abcdefghijklmnop"
+  );
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0].provider, "anthropic");
+});
+
+test("Detects a GitHub personal access token", () => {
+  const result = detectApiKeys(
+    "Token: ghp_1234567890abcdefghijklmnopqrstuvwxyz"
+  );
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0].provider, "github");
+});
+
+test("Detects an AWS access key ID", () => {
+  const result = detectApiKeys("AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE");
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0].provider, "aws");
+});
+
+test("Detects multiple API keys in text order", () => {
+  const result = detectApiKeys(
+    "AWS: AKIAIOSFODNN7EXAMPLE and GitHub: ghp_1234567890abcdefghijklmnopqrstuvwxyz"
+  );
+
+  assert.equal(result.length, 2);
+  assert.equal(result[0].provider, "aws");
+  assert.equal(result[1].provider, "github");
+});
+
+test("Returns an empty array when no API key exists", () => {
+  const result = detectApiKeys("This is a normal sentence with sk-short.");
+
+  assert.equal(result.length, 0);
+});
+
+test("Throws an error for non-string input", () => {
+  assert.throws(() => detectApiKeys(123), TypeError);
 });
