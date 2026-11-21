@@ -9,6 +9,8 @@ import { detectIPs } from "../src/detectors/ip.js";
 import { detectEmails } from "../src/detectors/email.js";
 import { detectApiKeys } from "../src/detectors/apiKey.js";
 import { assessRisk } from "../src/utils/risk.js";
+import { tokenize, detokenize } from "../src/core/tokenizer.js";
+
 
 
 test("Detects a valid email address", () => {
@@ -313,4 +315,76 @@ test("Defaults unknown or missing risk levels to low", () => {
 
 test("Throws a TypeError when findings is not an array", () => {
   assert.throws(() => assessRisk("not-an-array"), TypeError);
+});
+
+
+test("Tokenizes multiple PII findings in text order", () => {
+  const input = "Contact harsh@example.com or 192.168.1.10";
+  const findings = [
+    { type: "EMAIL", value: "harsh@example.com", start: 8, end: 25, risk: "medium" },
+    { type: "IP_ADDRESS", value: "192.168.1.10", start: 29, end: 41, risk: "medium" },
+  ];
+
+  const result = tokenize(input, findings);
+
+  assert.equal(result.redactedText, "Contact [EMAIL_1] or [IP_ADDRESS_1]");
+  assert.deepEqual(result.tokens, {
+    "[EMAIL_1]": "harsh@example.com",
+    "[IP_ADDRESS_1]": "192.168.1.10",
+  });
+});
+
+test("Reuses the same token for repeated identical values", () => {
+  const input = "Primary: a@b.com, Backup: a@b.com";
+  const findings = [
+    { type: "EMAIL", value: "a@b.com", start: 9, end: 16, risk: "medium" },
+    { type: "EMAIL", value: "a@b.com", start: 26, end: 33, risk: "medium" },
+  ];
+
+  const result = tokenize(input, findings);
+
+  assert.equal(result.redactedText, "Primary: [EMAIL_1], Backup: [EMAIL_1]");
+  assert.deepEqual(result.tokens, { "[EMAIL_1]": "a@b.com" });
+});
+
+test("Resolves overlapping findings by prioritizing higher risk", () => {
+  const input = "Secret: sk-proj-1234567890abcdefghijklmnop";
+  const findings = [
+    { type: "GENERIC", value: "sk-proj-1234567890abcdefghijklmnop", start: 8, end: 42, risk: "low" },
+    { type: "API_KEY", value: "sk-proj-1234567890abcdefghijklmnop", start: 8, end: 42, risk: "critical" },
+  ];
+
+  const result = tokenize(input, findings);
+
+  assert.equal(result.redactedText, "Secret: [API_KEY_1]");
+  assert.equal(result.detections.length, 1);
+  assert.equal(result.detections[0].type, "API_KEY");
+});
+
+test("Restores original text accurately with detokenize()", () => {
+  const original = "Email harsh@example.com from 192.168.1.10";
+  const findings = [
+    { type: "EMAIL", value: "harsh@example.com", start: 6, end: 23, risk: "medium" },
+    { type: "IP_ADDRESS", value: "192.168.1.10", start: 29, end: 41, risk: "medium" },
+  ];
+
+  const { redactedText, tokens } = tokenize(original, findings);
+  const restored = detokenize(redactedText, tokens);
+
+  assert.equal(restored, original);
+});
+
+test("Returns unchanged text when findings array is empty", () => {
+  const result = tokenize("Clean prompt with no secrets", []);
+
+  assert.equal(result.redactedText, "Clean prompt with no secrets");
+  assert.deepEqual(result.tokens, {});
+  assert.deepEqual(result.detections, []);
+});
+
+test("Throws TypeError for invalid tokenizer inputs", () => {
+  assert.throws(() => tokenize(123, []), TypeError);
+  assert.throws(() => tokenize("hello", "not-an-array"), TypeError);
+  assert.throws(() => detokenize(123, {}), TypeError);
+  assert.throws(() => detokenize("hello", null), TypeError);
 });
