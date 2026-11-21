@@ -8,6 +8,8 @@ import {
 import { detectIPs } from "../src/detectors/ip.js";
 import { detectEmails } from "../src/detectors/email.js";
 import { detectApiKeys } from "../src/detectors/apiKey.js";
+import { assessRisk } from "../src/utils/risk.js";
+
 
 test("Detects a valid email address", () => {
 const result = detectEmails("Contact me at harsh@example.com");
@@ -256,4 +258,59 @@ test("Returns an empty array when no API key exists", () => {
 
 test("Throws an error for non-string input", () => {
   assert.throws(() => detectApiKeys(123), TypeError);
+});
+
+
+test("Returns zero risk when no findings are present", () => {
+  const result = assessRisk([]);
+
+  assert.equal(result.score, 0);
+  assert.equal(result.level, "none");
+  assert.equal(result.totalFindings, 0);
+  assert.deepEqual(result.breakdown, {});
+});
+
+test("Scores a single critical finding accurately", () => {
+  const result = assessRisk([
+    { type: "API_KEY", risk: "critical", value: "sk-test", start: 0, end: 7 },
+  ]);
+
+  assert.equal(result.score, 85);
+  assert.equal(result.level, "critical");
+  assert.equal(result.totalFindings, 1);
+  assert.deepEqual(result.breakdown, { API_KEY: 1 });
+});
+
+test("Escalates overall level to the highest severity finding", () => {
+  const result = assessRisk([
+    { type: "IP_ADDRESS", risk: "medium", value: "192.168.1.1", start: 0, end: 11 },
+    { type: "CREDIT_CARD", risk: "high", value: "4111111111111111", start: 15, end: 31 },
+  ]);
+
+  assert.equal(result.level, "high");
+  assert.equal(result.score, 60);
+  assert.equal(result.totalFindings, 2);
+  assert.deepEqual(result.breakdown, { IP_ADDRESS: 1, CREDIT_CARD: 1 });
+});
+
+test("Caps aggregate risk score at 100", () => {
+  const result = assessRisk([
+    { type: "API_KEY", risk: "critical", value: "k1", start: 0, end: 2 },
+    { type: "API_KEY", risk: "critical", value: "k2", start: 3, end: 5 },
+    { type: "CREDIT_CARD", risk: "high", value: "c1", start: 6, end: 8 },
+  ]);
+
+  assert.equal(result.score, 100);
+  assert.equal(result.level, "critical");
+});
+
+test("Defaults unknown or missing risk levels to low", () => {
+  const result = assessRisk([{ type: "CUSTOM", value: "abc", start: 0, end: 3 }]);
+
+  assert.equal(result.score, 10);
+  assert.equal(result.level, "low");
+});
+
+test("Throws a TypeError when findings is not an array", () => {
+  assert.throws(() => assessRisk("not-an-array"), TypeError);
 });
